@@ -1,5 +1,5 @@
 {
-  "name": "vue-h5p",
+  "name": "eol-vue-h5p",
   "version": "0.3.0",
   "description": "Vue.js Component for displaying h5p content, based on h5p-standalone",
   "bugs": {
@@ -49,7 +49,7 @@
     "vue": "^2.6.14",
     "vue-template-compiler": "^2.6.14"
   },
-  "homepage": "https://github.com/technowledgy/vue-h5p#readme",
+  "homepage": "https://github.com/cuongdang1997/eol-vue-h5p#readme",
   "keywords": [
     "component",
     "vue",
@@ -58,7 +58,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/technowledgy/vue-h5p.git"
+    "url": "https://github.com/cuongdang1997/eol-vue-h5p.git"
   },
   "type": "module",
   "main": "dist/cjs/vue-h5p.js",

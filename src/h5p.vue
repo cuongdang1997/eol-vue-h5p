@@ -11,7 +11,7 @@
   <iframe
     v-else
     ref="iframe"
-    style="width: 100%; height: 100%; border: none;"
+    style="width: 100%; height: 100%; border: none"
     :srcdoc="srcdoc"
     @load="addEventHandlers"
   />
@@ -19,14 +19,17 @@
 
 <script>
 import Toposort from 'toposort-class'
-import { FetchError } from '@/errors'
-import l10n from '@/l10n'
+import { FetchError } from './errors'
+import l10n from './l10n'
 import frameScript from '../frame/script.es?raw'
 import frameStyle from '../frame/style?raw'
 
 export default {
   name: 'H5p',
   props: {
+    h5p: {
+      required: true
+    },
     src: {
       type: String,
       required: true
@@ -81,8 +84,10 @@ export default {
     let content
     let libraries
     try {
-      h5p = await this.getJSON('h5p.json')
-      content = await this.getJSON('content', 'content.json')
+      // h5p = await this.getJSON("h5p.json");
+      h5p = this.h5p.h5pJson || {}
+      // content = await this.getJSON("content", "content.json");
+      content = this.h5p.params.params || {}
       libraries = await this.loadDependencies(h5p.preloadedDependencies)
     } catch (e) {
       this.error = e
@@ -90,7 +95,10 @@ export default {
       return
     }
 
-    const { machineName, majorVersion, minorVersion } = h5p.preloadedDependencies.find(dep => dep.machineName === h5p.mainLibrary)
+    const { machineName, majorVersion, minorVersion } =
+      h5p.preloadedDependencies.find(
+        (dep) => dep.machineName === h5p.mainLibrary
+      )
     const h5pIntegration = {
       l10n: {
         H5P: Object.assign({}, l10n.H5P, this.l10n)
@@ -106,7 +114,9 @@ export default {
           jsonContent: JSON.stringify(content),
           url: this.path,
           displayOptions: {
-            frame: Boolean(this.export || this.embed || this.copyright || this.icon),
+            frame: Boolean(
+              this.export || this.embed || this.copyright || this.icon
+            ),
             export: Boolean(this.export),
             embed: Boolean(this.embed),
             copyright: this.copyright,
@@ -115,9 +125,7 @@ export default {
         }
       },
       _libraryPaths: Object.fromEntries(
-        Object.entries(libraries).map(
-          ([id, lib]) => [id, lib.path]
-        )
+        Object.entries(libraries).map(([id, lib]) => [id, lib.path])
       ),
       ...this.integration
     }
@@ -126,8 +134,12 @@ export default {
 
     // workaround for vue-loader parsing this as the end of our SFC's script block
     const endScript = '</' + 'script>'
-    const contentStyles = styles.map(style => `<link rel="stylesheet" href="${style}">`).join('\n')
-    const contentScripts = scripts.map(script => `<script src="${script}">${endScript}`).join('\n')
+    const contentStyles = styles
+      .map((style) => `<link rel="stylesheet" href="${style}">`)
+      .join('\n')
+    const contentScripts = scripts
+      .map((script) => `<script src="${script}">${endScript}`)
+      .join('\n')
     this.srcdoc = `<!doctype html>
 <html class="h5p-iframe">
   <head>
@@ -139,7 +151,7 @@ export default {
     ${contentScripts}
   </head>
   <body>
-    <div class="h5p-content" data-content-id="default"/>
+    <div class="h5p-content" data-content-id="4"/>
   </body>
 </html>`
 
@@ -152,52 +164,77 @@ export default {
       })
     },
     async getJSON (...url) {
-      const resp = await fetch(this.path + '/' + url.join('/'), { credentials: 'include' })
+      const resp = await fetch(this.path + '/' + url.join('/'), {
+        credentials: 'include'
+      })
       if (!resp.ok) {
         let body = {}
         try {
           body = await resp.json()
-        } catch { /* eslint-disable-line no-empty */ }
+        } catch {
+          /* eslint-disable-line no-empty */
+        }
         throw new FetchError(resp, body)
       }
       return resp.json()
     },
     async loadDependencies (deps, libraryMap = {}) {
-      await Promise.all(deps.map(async ({ machineName, majorVersion, minorVersion }) => {
-        const id = `${machineName}-${majorVersion}.${minorVersion}`
-        if (libraryMap[id]) return
-        try {
-          libraryMap[id] = {
-            library: await this.getJSON(id, 'library.json'),
-            path: id
+      await Promise.all(
+        deps.map(async ({ machineName, majorVersion, minorVersion }) => {
+          const id = `${machineName}-${majorVersion}.${minorVersion}`
+          if (libraryMap[id]) return
+          try {
+            libraryMap[id] = {
+              library: await this.getJSON('libraries/' + id, 'library.json'),
+              path: id
+            }
+          } catch {
+            libraryMap[id] = {
+              library: await this.getJSON(
+                'libraries/' + machineName,
+                'library.json'
+              ),
+              path: machineName
+            }
           }
-        } catch {
-          libraryMap[id] = {
-            library: await this.getJSON(machineName, 'library.json'),
-            path: machineName
+          const libDeps = libraryMap[id].library.preloadedDependencies
+          if (libDeps) {
+            this.loadDependencies(libDeps, libraryMap)
+            libraryMap[id].dependencies = libDeps.map(
+              ({ machineName, majorVersion, minorVersion }) =>
+                `${machineName}-${majorVersion}.${minorVersion}`
+            )
           }
-        }
-        const libDeps = libraryMap[id].library.preloadedDependencies
-        if (libDeps) {
-          this.loadDependencies(libDeps, libraryMap)
-          libraryMap[id].dependencies = libDeps.map(({ machineName, majorVersion, minorVersion }) => `${machineName}-${majorVersion}.${minorVersion}`)
-        }
-      }))
+        })
+      )
       return libraryMap
     },
     sortDependencies (libraries) {
       const sorter = new Toposort()
-      Object.entries(libraries)
-        .forEach(([id, { dependencies = [] }]) => sorter.add(id, dependencies))
+      Object.entries(libraries).forEach(([id, { dependencies = [] }]) =>
+        sorter.add(id, dependencies)
+      )
       const sorted = sorter.sort().reverse()
 
-      const styles = sorted.map(id => libraries[id])
-        .map(({ path, library }) => library.preloadedCss?.map(file => `${this.path}/${path}/${file.path}`))
+      const styles = sorted
+        .map((id) => libraries[id])
+        .filter(Boolean)
+        .map(({ path, library }) =>
+          library.preloadedCss?.map(
+            (file) => `${this.path}/libraries/${path}/${file.path}`
+          )
+        )
         .flat(1)
         .filter(Boolean)
 
-      const scripts = sorted.map(id => libraries[id])
-        .map(({ path, library }) => library.preloadedJs?.map(file => `${this.path}/${path}/${file.path}`))
+      const scripts = sorted
+        .map((id) => libraries[id])
+        .filter(Boolean)
+        .map(({ path, library }) =>
+          library.preloadedJs?.map(
+            (file) => `${this.path}/libraries/${path}/${file.path}`
+          )
+        )
         .flat(1)
         .filter(Boolean)
 
